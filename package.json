@@ -1,0 +1,23 @@
+{
+  "name": "app",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxi build",
+    "dev": "nuxi dev",
+    "generate": "nuxt generate",
+    "preview": "nuxi preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "mysql2": "^3.22.5",
+    "nuxt": "^4.4.8",
+    "vue": "^3.5.38",
+    "vue-router": "^5.1.0"
+  },
+  "devDependencies": {
+    "@vue/test-utils": "^2.4.11",
+    "jsdom": "^29.1.1",
+    "vitest": "^4.1.9"
+  }
+}
