@@ -41,3 +41,5 @@
 - Authentication and user identity are the first priorities.
 - Membership, renewal, and communication data will be discussed as the app evolves.
 - MySQL 9 and mysql2 will be used for backend connectivity when the integration work begins.
+- For the initial phase, user accounts and roles should live in the main application database on the database server so they can be managed with the same operational tooling and access controls.
+- If the system grows, we can split authentication and authorization into dedicated schemas or a separate service, but that should be a later architectural decision rather than a default starting point.

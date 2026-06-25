@@ -1,19 +1,26 @@
 <script setup>
-import { ref } from "vue";
-import { authenticateUser } from "~/composables/useAuth";
+import { onMounted, ref } from "vue";
+import { getCurrentUser, loginUser } from "~/composables/useAuth";
 
 const email = ref("");
 const password = ref("");
+const showPassword = ref(false);
 const error = ref("");
 const pending = ref(false);
 const route = useRoute();
 const router = useRouter();
 
+onMounted(() => {
+  if (getCurrentUser()) {
+    router.replace("/");
+  }
+});
+
 async function submit() {
   error.value = "";
   pending.value = true;
 
-  const result = authenticateUser({
+  const result = loginUser({
     email: email.value,
     password: password.value,
   });
@@ -50,12 +57,22 @@ async function submit() {
 
       <label class="field">
         <span>Password</span>
-        <input
-          v-model="password"
-          type="password"
-          placeholder="password123"
-          required
-        />
+        <div class="password-input">
+          <input
+            v-model="password"
+            :type="showPassword ? 'text' : 'password'"
+            placeholder="password123"
+            required
+          />
+          <button
+            type="button"
+            class="toggle-button"
+            :aria-pressed="showPassword"
+            @click="showPassword = !showPassword"
+          >
+            {{ showPassword ? "Hide" : "Show" }}
+          </button>
+        </div>
       </label>
 
       <p v-if="error" class="error">{{ error }}</p>
@@ -126,9 +143,29 @@ input {
   border-radius: 12px;
   padding: 0.8rem 0.95rem;
   font: inherit;
+  width: 100%;
 }
 
-button {
+.password-input {
+  position: relative;
+}
+
+.toggle-button {
+  position: absolute;
+  top: 50%;
+  right: 0.5rem;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--secondary-teal);
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.25rem 0.4rem;
+  margin: 0;
+  width: auto;
+}
+
+button[type="submit"] {
   width: 100%;
   margin-top: 1.2rem;
   border: 0;

@@ -1,9 +1,29 @@
+<script setup>
+import { computed } from "vue";
+import { getCurrentUser, logoutUser } from "~/composables/useAuth";
+
+const router = useRouter();
+const user = computed(() => getCurrentUser());
+
+function signOut() {
+  logoutUser();
+  router.push("/login");
+}
+</script>
+
 <template>
   <div class="page-shell">
     <div class="panel">
-      <p class="eyebrow">Membership Management</p>
-      <h1>Welcome back</h1>
-      <p class="subtitle">Manage members, renewals, and communications from one place.</p>
+      <div class="panel-head">
+        <div>
+          <p class="eyebrow">Membership Management</p>
+          <h1>Welcome back, {{ user?.name || "there" }}</h1>
+          <p class="subtitle">
+            Manage members, renewals, and communications from one place.
+          </p>
+        </div>
+        <button class="ghost-button" @click="signOut">Log out</button>
+      </div>
       <div class="card-grid">
         <div class="stat-card">
           <strong>1,248</strong>
@@ -35,6 +55,14 @@
   box-shadow: 0 20px 45px rgba(15, 37, 55, 0.12);
 }
 
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
 .eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.24em;
@@ -51,7 +79,17 @@ h1 {
 
 .subtitle {
   color: var(--text-muted);
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
+}
+
+.ghost-button {
+  border: 1px solid rgba(15, 37, 55, 0.12);
+  background: var(--bg-white);
+  color: var(--primary-navy);
+  border-radius: 999px;
+  padding: 0.7rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .card-grid {
