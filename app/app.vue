@@ -1,6 +1,10 @@
 <script setup>
 import { onBeforeUnmount, onMounted, watch } from "vue";
-import { initializeAuthSession, isAuthenticated } from "~/composables/useAuth";
+import {
+  initializeAuthSession,
+  isAuthenticated,
+  isRouteProtected,
+} from "~/composables/useAuth";
 
 const route = useRoute();
 const router = useRouter();
@@ -12,9 +16,7 @@ function handleAuthLogout() {
 }
 
 function enforceAuthProtection() {
-  const protectedRoutes = ["/"];
-  const isProtectedRoute = protectedRoutes.includes(route.path);
-
+  const isProtectedRoute = isRouteProtected(route.path);
   if (isProtectedRoute && !isAuthenticated()) {
     router.replace("/login");
   }

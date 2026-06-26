@@ -3,6 +3,7 @@ import {
   authenticateUser,
   getCurrentUser,
   isAuthenticated,
+  isRouteProtected,
   loginUser,
   logoutUser,
 } from "../composables/useAuth.js";
@@ -33,6 +34,14 @@ describe("authenticateUser", () => {
 
     expect(result.ok).toBe(true);
     expect(result.user.name).toBe("Demo Admin");
+  });
+});
+
+describe("route protection", () => {
+  it("treats all non-login routes as protected", () => {
+    expect(isRouteProtected("/login")).toBe(false);
+    expect(isRouteProtected("/")).toBe(true);
+    expect(isRouteProtected("/members")).toBe(true);
   });
 });
 

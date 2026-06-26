@@ -149,6 +149,15 @@ export function isAuthenticated() {
   return Boolean(getCurrentUser());
 }
 
+export function isRouteProtected(pathname = "") {
+  if (!pathname) {
+    return false;
+  }
+
+  const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  return normalizedPath !== "/login";
+}
+
 export function initializeAuthSession() {
   if (typeof window === "undefined") {
     return;
