@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   authenticateUser,
   getCurrentUser,
+  isAuthenticated,
   loginUser,
   logoutUser,
 } from "../composables/useAuth.js";
@@ -39,6 +40,11 @@ describe("session flow", () => {
   beforeEach(() => {
     logoutUser();
     localStorage.clear();
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("persists the signed-in user after a successful login", () => {
@@ -55,6 +61,25 @@ describe("session flow", () => {
   it("clears the stored session after logout", () => {
     loginUser({ email: "admin@membership.test", password: "password123" });
     logoutUser();
+
+    expect(getCurrentUser()).toBeNull();
+    expect(localStorage.getItem("membership-auth")).toBeNull();
+  });
+
+  it("reports whether the user is currently authenticated", () => {
+    expect(isAuthenticated()).toBe(false);
+
+    loginUser({ email: "admin@membership.test", password: "password123" });
+
+    expect(isAuthenticated()).toBe(true);
+  });
+
+  it("logs the user out after 10 minutes of inactivity", () => {
+    loginUser({ email: "admin@membership.test", password: "password123" });
+
+    expect(getCurrentUser()).toMatchObject({ email: "admin@membership.test" });
+
+    vi.advanceTimersByTime(10 * 60 * 1000);
 
     expect(getCurrentUser()).toBeNull();
     expect(localStorage.getItem("membership-auth")).toBeNull();
