@@ -1,75 +1,82 @@
-# Nuxt Minimal Starter
+# Membership App
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+This project now includes a basic MySQL-backed API layer for authentication, user management, and starter role-based access controls.
+
+The backend remains SQL-first: there are no ORM abstractions or migration tooling in this MVP. Database changes should be applied directly with SQL scripts when needed.
 
 ## Setup
 
 Make sure to install dependencies:
 
 ```bash
-# npm
 npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
-bun install
 ```
 
-## Development Server
+## Environment configuration
 
-Start the development server on `http://localhost:3000`:
+Copy [.env.example](.env.example) to .env and set the database connection values used by the app:
+
+- DB_HOST
+- DB_PORT
+- DB_USER
+- DB_PASSWORD
+- DB_DATABASE
+
+These values are used for the current development/staging environment and can be pointed at the production server when needed.
+
+## Database setup
+
+1. Apply the SQL in [app/server/utils/schema.sql](app/server/utils/schema.sql) to your MySQL database.
+2. Confirm the users table and starter user_groups rows exist.
+3. Start the app with:
 
 ```bash
-# npm
 npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
-bun run dev
 ```
 
-## Production
+## API endpoints
 
-Build the application for production:
+- POST /api/login
+- GET /api/users
+- POST /api/users
+- DELETE /api/users/:id
 
-```bash
-# npm
-npm run build
+## Starter roles
 
-# pnpm
-pnpm build
+The current schema includes three starter groups:
 
-# yarn
-yarn build
+- Admin: can manage users and membership workflows
+- Membership: can manage memberships but cannot create new users
+- Organizer: lookup-only access
 
-# bun
-bun run build
-```
+## MVP data model notes
 
-Locally preview production build:
+The initial membership app will focus on a small set of core entities:
 
-```bash
-# npm
-npm run preview
+- User: authenticated account for app access
+- User group: role-based access control for users
+- Member: a person tracked by the membership system
 
-# pnpm
-pnpm preview
+Suggested initial relationships:
 
-# yarn
-yarn preview
+- One user belongs to one group
+- One member may be linked to one primary user account for administration
+- Membership status can be tracked for each member as part of the first feature set
 
-# bun
-bun run preview
-```
+Suggested starter member fields:
 
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+- full name
+- email address
+- phone number
+- membership status
+- join date
+- renewal date
+- notes
+
+Suggested starter statuses:
+
+- Active
+- Pending
+- Expired
+
+This MVP intentionally keeps the model simple and can expand as new workflows are introduced.
