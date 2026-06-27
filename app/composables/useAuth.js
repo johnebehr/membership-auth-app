@@ -120,7 +120,7 @@ function startInactivityTimer() {
   }, remainingTime);
 }
 
-export function authenticateUser({ email, password }) {
+export async function authenticateUser({ email, password }) {
   if (!email?.trim() || !password?.trim()) {
     return {
       ok: false,
@@ -139,10 +139,49 @@ export function authenticateUser({ email, password }) {
     };
   }
 
-  return {
-    ok: false,
-    message: "Invalid email or password.",
-  };
+  if (typeof window === "undefined") {
+    return {
+      ok: false,
+      message: "Invalid email or password.",
+    };
+  }
+
+  try {
+    const baseUrl =
+      window.location?.origin ||
+      (typeof window !== "undefined"
+        ? window.location.href
+        : "http://localhost");
+    const response = await window.fetch(`${baseUrl}/api/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const payload = await response.json();
+
+    if (!response.ok || !payload?.ok) {
+      return {
+        ok: false,
+        message:
+          payload?.message ||
+          payload?.statusMessage ||
+          "Invalid email or password.",
+      };
+    }
+
+    return {
+      ok: true,
+      user: payload.user,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message: error?.message || "Unable to reach the authentication service.",
+    };
+  }
 }
 
 export function isAuthenticated() {
@@ -212,8 +251,8 @@ export function getCurrentUser() {
   return session.user;
 }
 
-export function loginUser({ email, password }) {
-  const result = authenticateUser({ email, password });
+export async function loginUser({ email, password }) {
+  const result = await authenticateUser({ email, password });
 
   if (!result.ok) {
     return result;

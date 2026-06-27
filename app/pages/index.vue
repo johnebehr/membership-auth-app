@@ -34,6 +34,10 @@ function signOut() {
           <span>Renewal rate</span>
         </div>
       </div>
+
+      <div class="action-row">
+        <NuxtLink class="ghost-button" to="/users">Manage users</NuxtLink>
+      </div>
     </div>
   </div>
 </template>
@@ -96,6 +100,10 @@ h1 {
   display: grid;
   gap: 1rem;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.action-row {
+  margin-top: 1.25rem;
 }
 
 .stat-card {

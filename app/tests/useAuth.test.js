@@ -9,15 +9,26 @@ import {
 } from "../composables/useAuth.js";
 
 describe("authenticateUser", () => {
-  it("rejects empty credentials", () => {
-    const result = authenticateUser({ email: "", password: "" });
+  it("rejects empty credentials", async () => {
+    const result = await authenticateUser({ email: "", password: "" });
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("Please enter");
   });
 
-  it("rejects invalid credentials", () => {
-    const result = authenticateUser({
+  it("rejects invalid credentials", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          ok: false,
+          message: "Invalid email or password.",
+        }),
+      }),
+    );
+
+    const result = await authenticateUser({
       email: "wrong@example.com",
       password: "nope",
     });
@@ -26,8 +37,8 @@ describe("authenticateUser", () => {
     expect(result.message).toContain("Invalid");
   });
 
-  it("accepts the demo credentials for the initial experience", () => {
-    const result = authenticateUser({
+  it("accepts the demo credentials for the initial experience", async () => {
+    const result = await authenticateUser({
       email: "admin@membership.test",
       password: "password123",
     });
@@ -54,10 +65,11 @@ describe("session flow", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
-  it("persists the signed-in user after a successful login", () => {
-    const result = loginUser({
+  it("persists the signed-in user after a successful login", async () => {
+    const result = await loginUser({
       email: "admin@membership.test",
       password: "password123",
     });
@@ -67,24 +79,33 @@ describe("session flow", () => {
     expect(localStorage.getItem("membership-auth")).toContain("Demo Admin");
   });
 
-  it("clears the stored session after logout", () => {
-    loginUser({ email: "admin@membership.test", password: "password123" });
+  it("clears the stored session after logout", async () => {
+    await loginUser({
+      email: "admin@membership.test",
+      password: "password123",
+    });
     logoutUser();
 
     expect(getCurrentUser()).toBeNull();
     expect(localStorage.getItem("membership-auth")).toBeNull();
   });
 
-  it("reports whether the user is currently authenticated", () => {
+  it("reports whether the user is currently authenticated", async () => {
     expect(isAuthenticated()).toBe(false);
 
-    loginUser({ email: "admin@membership.test", password: "password123" });
+    await loginUser({
+      email: "admin@membership.test",
+      password: "password123",
+    });
 
     expect(isAuthenticated()).toBe(true);
   });
 
-  it("logs the user out after 10 minutes of inactivity", () => {
-    loginUser({ email: "admin@membership.test", password: "password123" });
+  it("logs the user out after 10 minutes of inactivity", async () => {
+    await loginUser({
+      email: "admin@membership.test",
+      password: "password123",
+    });
 
     expect(getCurrentUser()).toMatchObject({ email: "admin@membership.test" });
 
@@ -92,5 +113,29 @@ describe("session flow", () => {
 
     expect(getCurrentUser()).toBeNull();
     expect(localStorage.getItem("membership-auth")).toBeNull();
+  });
+  it("uses the real login API when credentials are submitted", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          ok: true,
+          user: {
+            id: 2,
+            name: "API User",
+            email: "api@example.com",
+          },
+        }),
+      }),
+    );
+
+    const result = await loginUser({
+      email: "api@example.com",
+      password: "secret123",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(getCurrentUser()).toMatchObject({ email: "api@example.com" });
   });
 });

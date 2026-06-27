@@ -20,7 +20,7 @@ async function submit() {
   error.value = "";
   pending.value = true;
 
-  const result = loginUser({
+  const result = await loginUser({
     email: email.value,
     password: password.value,
   });
@@ -42,7 +42,7 @@ async function submit() {
       <div class="brand-block">
         <p class="eyebrow">Local 8068 Membership</p>
         <h1>Sign in</h1>
-        <p class="subtitle">Use the demo credentials to continue.</p>
+        <p class="subtitle">Sign in with your account credentials.</p>
       </div>
 
       <label class="field">
@@ -81,7 +81,9 @@ async function submit() {
         {{ pending ? "Signing in..." : "Continue" }}
       </button>
 
-      <p class="hint">Demo credentials: admin@membership.test / password123</p>
+      <p class="hint">
+        The app will authenticate against the configured backend API.
+      </p>
     </form>
   </div>
 </template>
