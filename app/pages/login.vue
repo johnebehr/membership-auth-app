@@ -46,11 +46,14 @@ async function submit() {
       </div>
 
       <label class="field">
-        <span>Email</span>
+        <span>Username or email</span>
         <input
           v-model="email"
-          type="email"
-          placeholder="admin@membership.test"
+          type="text"
+          name="username"
+          autocomplete="username"
+          inputmode="email"
+          placeholder="admin or admin@membership.test"
           required
         />
       </label>
@@ -61,6 +64,8 @@ async function submit() {
           <input
             v-model="password"
             :type="showPassword ? 'text' : 'password'"
+            name="password"
+            autocomplete="current-password"
             placeholder="password123"
             required
           />

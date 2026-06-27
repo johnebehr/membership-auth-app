@@ -4,6 +4,26 @@ import {
   verifyPassword,
 } from "../../app/server/utils/password.js";
 
+function normalizeLoginIdentifier(identifier) {
+  const trimmedIdentifier = identifier?.trim();
+
+  if (!trimmedIdentifier) {
+    return { lookup: "", fallback: null };
+  }
+
+  if (trimmedIdentifier.includes("@")) {
+    return { lookup: trimmedIdentifier, fallback: null };
+  }
+
+  const defaultDomain = process.env.DEFAULT_EMAIL_DOMAIN?.trim();
+
+  if (!defaultDomain) {
+    return { lookup: trimmedIdentifier, fallback: `${trimmedIdentifier}@%` };
+  }
+
+  return { lookup: `${trimmedIdentifier}@${defaultDomain}`, fallback: null };
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
 
@@ -24,13 +44,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const pool = await getDatabasePool();
+  const { lookup, fallback } = normalizeLoginIdentifier(body.email);
+  const query = fallback
+    ? `SELECT users.id, users.name, users.email, users.password_hash, users.group_id, user_groups.slug AS group_slug, user_groups.name AS group_name
+       FROM users
+       LEFT JOIN user_groups ON user_groups.id = users.group_id
+       WHERE users.email = ? OR users.email LIKE ?
+       LIMIT 1`
+    : `SELECT users.id, users.name, users.email, users.password_hash, users.group_id, user_groups.slug AS group_slug, user_groups.name AS group_name
+       FROM users
+       LEFT JOIN user_groups ON user_groups.id = users.group_id
+       WHERE users.email = ?
+       LIMIT 1`;
+
   const [rows] = await pool.query(
-    `SELECT users.id, users.name, users.email, users.password_hash, users.group_id, user_groups.slug AS group_slug, user_groups.name AS group_name
-     FROM users
-     LEFT JOIN user_groups ON user_groups.id = users.group_id
-     WHERE users.email = ?
-     LIMIT 1`,
-    [body.email.trim()],
+    query,
+    fallback ? [lookup, fallback] : [lookup],
   );
 
   const user = rows?.[0];
