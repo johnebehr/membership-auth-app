@@ -1,4 +1,8 @@
 import { getDatabasePool } from "../utils/database.js";
+import {
+  validatePassword,
+  verifyPassword,
+} from "../../app/server/utils/password.js";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -7,6 +11,15 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: "Email and password are required.",
+    });
+  }
+
+  const passwordCheck = validatePassword(body.password);
+
+  if (!passwordCheck.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: passwordCheck.message,
     });
   }
 
@@ -22,7 +35,7 @@ export default defineEventHandler(async (event) => {
 
   const user = rows?.[0];
 
-  if (!user || user.password_hash !== body.password.trim()) {
+  if (!user || !verifyPassword(body.password.trim(), user.password_hash)) {
     throw createError({
       statusCode: 401,
       statusMessage: "Invalid email or password.",

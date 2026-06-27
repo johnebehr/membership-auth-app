@@ -1,4 +1,5 @@
 import { getDatabasePool } from "../utils/database.js";
+import { hashPassword, validatePassword } from "../utils/password.js";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
@@ -7,6 +8,15 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       statusMessage: "Name, email, and password are required.",
+    });
+  }
+
+  const passwordCheck = validatePassword(body.password);
+
+  if (!passwordCheck.ok) {
+    throw createError({
+      statusCode: 400,
+      statusMessage: passwordCheck.message,
     });
   }
 
@@ -20,14 +30,11 @@ export default defineEventHandler(async (event) => {
     });
   }
 
+  const passwordHash = hashPassword(body.password.trim());
+
   const [insertResult] = await pool.query(
-    "INSERT INTO users (name, email, password_hash, group_id) VALUES (?, ?, ?, ?)",
-    [
-      body.name.trim(),
-      body.email.trim(),
-      body.password.trim(),
-      normalizedGroupId,
-    ],
+    "INSERT INTO users (name, email, password_hash, group_id, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
+    [body.name.trim(), body.email.trim(), passwordHash, normalizedGroupId],
   );
 
   const [rows] = await pool.query(

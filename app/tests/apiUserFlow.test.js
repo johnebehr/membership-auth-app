@@ -49,7 +49,7 @@ describe("database-backed user management flow", () => {
       body: {
         name: "Casey",
         email: "casey@example.com",
-        password: "s3cr3t",
+        password: "StrongPassword123!",
         group_id: 2,
       },
     });
@@ -73,7 +73,7 @@ describe("database-backed user management flow", () => {
             id: 7,
             name: "Casey",
             email: "casey@example.com",
-            password_hash: "s3cr3t",
+            password_hash: "StrongPassword123!",
             group_id: 2,
             group_slug: "membership",
             group_name: "Membership",
@@ -88,7 +88,7 @@ describe("database-backed user management flow", () => {
       await import("../server/api/login.post.js");
 
     const result = await loginPostHandler({
-      body: { email: "casey@example.com", password: "s3cr3t" },
+      body: { email: "casey@example.com", password: "StrongPassword123!" },
     });
 
     expect(result.ok).toBe(true);
