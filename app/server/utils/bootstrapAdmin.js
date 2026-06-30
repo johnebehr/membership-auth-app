@@ -26,9 +26,26 @@ export async function seedInitialAdminUsers(adminUsers = []) {
 
     const passwordHash = hashPassword(password);
     const [insertResult] = await pool.query(
-      "INSERT INTO users (name, email, password_hash, group_id, created_at, updated_at) VALUES (?, ?, ?, (SELECT id FROM user_groups WHERE slug = 'admin' LIMIT 1), CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
+      "INSERT INTO users (first_name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
       [name, email, passwordHash],
     );
+
+    let groupRows = [];
+
+    try {
+      [groupRows] = await pool.query(
+        "SELECT id FROM user_groups WHERE slug = 'admin' LIMIT 1",
+      );
+    } catch {
+      groupRows = [];
+    }
+
+    if (Array.isArray(groupRows) && groupRows.length) {
+      await pool.query(
+        "INSERT INTO user_group_memberships (user_id, group_id) VALUES (?, ?)",
+        [insertResult.insertId, groupRows[0].id],
+      );
+    }
 
     createdUsers.push({
       id: insertResult.insertId,

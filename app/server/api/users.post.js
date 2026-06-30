@@ -3,11 +3,18 @@ import { hashPassword, validatePassword } from "../utils/password.js";
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event);
+  const firstName = body?.first_name?.trim();
+  const lastName = body?.last_name?.trim();
 
-  if (!body?.name?.trim() || !body?.email?.trim() || !body?.password?.trim()) {
+  if (
+    !firstName ||
+    !lastName ||
+    !body?.email?.trim() ||
+    !body?.password?.trim()
+  ) {
     throw createError({
       statusCode: 400,
-      statusMessage: "Name, email, and password are required.",
+      statusMessage: "First name, last name, email, and password are required.",
     });
   }
 
@@ -21,9 +28,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const pool = await getDatabasePool();
-  const normalizedGroupId = body.group_id ? Number(body.group_id) : null;
+  const groupIds = Array.isArray(body.group_ids)
+    ? body.group_ids
+        .map((groupId) => Number(groupId))
+        .filter((groupId) => Number.isInteger(groupId) && groupId > 0)
+    : [];
 
-  if (body.group_id && Number.isNaN(normalizedGroupId)) {
+  if (body.group_ids && !groupIds.length) {
     throw createError({
       statusCode: 400,
       statusMessage: "Group selection is invalid.",
@@ -33,28 +44,57 @@ export default defineEventHandler(async (event) => {
   const passwordHash = hashPassword(body.password.trim());
 
   const [insertResult] = await pool.query(
-    "INSERT INTO users (name, email, password_hash, group_id, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
-    [body.name.trim(), body.email.trim(), passwordHash, normalizedGroupId],
+    "INSERT INTO users (first_name, last_name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
+    [firstName, lastName, body.email.trim(), passwordHash],
   );
 
+  if (groupIds.length) {
+    const membershipValues = groupIds.map((groupId) => [
+      insertResult.insertId,
+      groupId,
+    ]);
+    await pool.query(
+      "INSERT INTO user_group_memberships (user_id, group_id) VALUES ?",
+      [membershipValues],
+    );
+  }
+
   const [rows] = await pool.query(
-    `SELECT users.id, users.name, users.email, users.group_id, user_groups.slug AS group_slug, user_groups.name AS group_name
+    `SELECT users.id, users.name, users.email,
+            GROUP_CONCAT(user_groups.id ORDER BY user_groups.name SEPARATOR ',') AS group_ids,
+            GROUP_CONCAT(user_groups.name ORDER BY user_groups.name SEPARATOR ',') AS group_names,
+            GROUP_CONCAT(user_groups.slug ORDER BY user_groups.name SEPARATOR ',') AS group_slugs
      FROM users
-     LEFT JOIN user_groups ON user_groups.id = users.group_id
+     LEFT JOIN user_group_memberships ON user_group_memberships.user_id = users.id
+     LEFT JOIN user_groups ON user_groups.id = user_group_memberships.group_id
      WHERE users.id = ?
+     GROUP BY users.id
      LIMIT 1`,
     [insertResult.insertId],
   );
 
+  const user = rows?.[0];
+
   return {
     ok: true,
-    user: rows?.[0] || {
-      id: insertResult.insertId,
-      name: body.name.trim(),
-      email: body.email.trim(),
-      group_id: normalizedGroupId,
-      group_slug: null,
-      group_name: null,
-    },
+    user: user
+      ? {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          group_ids: user.group_ids
+            ? user.group_ids.split(",").map((groupId) => Number(groupId))
+            : [],
+          group_names: user.group_names ? user.group_names.split(",") : [],
+          group_slugs: user.group_slugs ? user.group_slugs.split(",") : [],
+        }
+      : {
+          id: insertResult.insertId,
+          name: `${firstName} ${lastName}`.trim(),
+          email: body.email.trim(),
+          group_ids: [],
+          group_names: [],
+          group_slugs: [],
+        },
   };
 });

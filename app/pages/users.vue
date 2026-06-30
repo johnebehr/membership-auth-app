@@ -2,15 +2,59 @@
 import { onMounted, ref } from "vue";
 
 const users = ref([]);
+const groups = ref([]);
 const loading = ref(true);
 const error = ref("");
+const groupForm = ref({ slug: "", name: "", description: "" });
+const groupPending = ref(false);
+const editingGroupId = ref(null);
+const editGroupForm = ref({ slug: "", name: "", description: "" });
 const form = ref({
-  name: "",
+  first_name: "",
+  last_name: "",
   email: "",
   password: "",
-  group_id: "",
+  group_ids: [],
 });
 const pending = ref(false);
+const editingUserId = ref(null);
+const editForm = ref({
+  first_name: "",
+  last_name: "",
+  email: "",
+  password: "",
+  group_ids: [],
+});
+
+function resetCreateForm() {
+  form.value = {
+    first_name: "",
+    last_name: "",
+    email: "",
+    password: "",
+    group_ids: [],
+  };
+}
+
+function resetEditForm() {
+  editingUserId.value = null;
+  editForm.value = {
+    first_name: "",
+    last_name: "",
+    email: "",
+    password: "",
+    group_ids: [],
+  };
+}
+
+function resetGroupForm() {
+  groupForm.value = { slug: "", name: "", description: "" };
+}
+
+function resetGroupEditForm() {
+  editingGroupId.value = null;
+  editGroupForm.value = { slug: "", name: "", description: "" };
+}
 
 async function loadUsers() {
   loading.value = true;
@@ -25,6 +69,7 @@ async function loadUsers() {
     }
 
     users.value = payload.users || [];
+    groups.value = payload.groups || [];
   } catch (err) {
     error.value = err?.message || "Unable to load users.";
   } finally {
@@ -34,7 +79,8 @@ async function loadUsers() {
 
 async function createUser() {
   if (
-    !form.value.name.trim() ||
+    !form.value.first_name.trim() ||
+    !form.value.last_name.trim() ||
     !form.value.email.trim() ||
     !form.value.password.trim()
   ) {
@@ -57,7 +103,7 @@ async function createUser() {
       throw new Error(payload?.message || "Unable to create user.");
     }
 
-    form.value = { name: "", email: "", password: "", group_id: "" };
+    resetCreateForm();
     await loadUsers();
   } catch (err) {
     error.value = err?.message || "Unable to create user.";
@@ -78,6 +124,143 @@ async function removeUser(id) {
     await loadUsers();
   } catch (err) {
     error.value = err?.message || "Unable to remove user.";
+  }
+}
+
+async function createGroup() {
+  if (!groupForm.value.slug.trim() || !groupForm.value.name.trim()) {
+    error.value = "Please complete the group fields.";
+    return;
+  }
+
+  groupPending.value = true;
+  error.value = "";
+
+  try {
+    const response = await fetch("/api/groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(groupForm.value),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Unable to create group.");
+    }
+
+    resetGroupForm();
+    await loadUsers();
+  } catch (err) {
+    error.value = err?.message || "Unable to create group.";
+  } finally {
+    groupPending.value = false;
+  }
+}
+
+function startGroupEditing(group) {
+  editingGroupId.value = group.id;
+  editGroupForm.value = {
+    slug: group.slug || "",
+    name: group.name || "",
+    description: group.description || "",
+  };
+}
+
+async function updateGroup() {
+  if (!editingGroupId.value) {
+    return;
+  }
+
+  if (!editGroupForm.value.slug.trim() || !editGroupForm.value.name.trim()) {
+    error.value = "Please complete the group fields.";
+    return;
+  }
+
+  groupPending.value = true;
+  error.value = "";
+
+  try {
+    const response = await fetch(`/api/groups/${editingGroupId.value}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editGroupForm.value),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Unable to update group.");
+    }
+
+    resetGroupEditForm();
+    await loadUsers();
+  } catch (err) {
+    error.value = err?.message || "Unable to update group.";
+  } finally {
+    groupPending.value = false;
+  }
+}
+
+async function deleteGroup(id) {
+  try {
+    const response = await fetch(`/api/groups/${id}`, { method: "DELETE" });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Unable to remove group.");
+    }
+
+    await loadUsers();
+  } catch (err) {
+    error.value = err?.message || "Unable to remove group.";
+  }
+}
+
+function startEditing(user) {
+  editingUserId.value = user.id;
+  editForm.value = {
+    first_name: user.first_name || user.name?.split(" ")[0] || "",
+    last_name: user.last_name || user.name?.split(" ").slice(1).join(" ") || "",
+    email: user.email || "",
+    password: "",
+    group_ids: user.group_ids || [],
+  };
+}
+
+async function updateUser() {
+  if (!editingUserId.value) {
+    return;
+  }
+
+  if (
+    !editForm.value.first_name.trim() ||
+    !editForm.value.last_name.trim() ||
+    !editForm.value.email.trim()
+  ) {
+    error.value = "Please complete the editable fields.";
+    return;
+  }
+
+  pending.value = true;
+  error.value = "";
+
+  try {
+    const response = await fetch(`/api/users/${editingUserId.value}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editForm.value),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      throw new Error(payload?.message || "Unable to update user.");
+    }
+
+    resetEditForm();
+    await loadUsers();
+  } catch (err) {
+    error.value = err?.message || "Unable to update user.";
+  } finally {
+    pending.value = false;
   }
 }
 
@@ -105,8 +288,12 @@ onMounted(() => {
           <h2>Create user</h2>
           <form class="form" @submit.prevent="createUser">
             <label class="field">
-              <span>Name</span>
-              <input v-model="form.name" placeholder="Jane Doe" required />
+              <span>First name</span>
+              <input v-model="form.first_name" placeholder="Jane" required />
+            </label>
+            <label class="field">
+              <span>Last name</span>
+              <input v-model="form.last_name" placeholder="Doe" required />
             </label>
             <label class="field">
               <span>Email</span>
@@ -122,23 +309,109 @@ onMounted(() => {
               <input
                 v-model="form.password"
                 type="password"
-                placeholder="Initial password"
+                placeholder="User password"
                 required
               />
             </label>
             <label class="field">
-              <span>Group</span>
-              <select v-model="form.group_id">
-                <option value="">No group</option>
-                <option value="1">Admin</option>
-                <option value="2">Membership</option>
-                <option value="3">Organizer</option>
+              <span>Groups</span>
+              <select v-model="form.group_ids" multiple size="4">
+                <option
+                  v-for="group in groups"
+                  :key="group.id"
+                  :value="Number(group.id)"
+                >
+                  {{ group.name }}
+                </option>
               </select>
             </label>
             <button type="submit" :disabled="pending">
               {{ pending ? "Creating..." : "Create user" }}
             </button>
           </form>
+        </section>
+
+        <section class="panel-card">
+          <h2>Groups</h2>
+          <form class="form" @submit.prevent="createGroup">
+            <label class="field">
+              <span>Slug</span>
+              <input
+                v-model="groupForm.slug"
+                placeholder="membership"
+                required
+              />
+            </label>
+            <label class="field">
+              <span>Name</span>
+              <input
+                v-model="groupForm.name"
+                placeholder="Membership"
+                required
+              />
+            </label>
+            <label class="field">
+              <span>Description</span>
+              <input v-model="groupForm.description" placeholder="Optional" />
+            </label>
+            <button type="submit" :disabled="groupPending">
+              {{ groupPending ? "Saving..." : "Create group" }}
+            </button>
+          </form>
+
+          <ul v-if="groups.length" class="user-list">
+            <li v-for="group in groups" :key="group.id" class="user-item">
+              <div v-if="editingGroupId !== group.id">
+                <strong>{{ group.name }}</strong>
+                <p>{{ group.slug }}</p>
+                <p class="group-label">
+                  {{ group.description || "No description" }}
+                </p>
+              </div>
+              <div v-else class="edit-form">
+                <label class="field compact-field">
+                  <span>Slug</span>
+                  <input v-model="editGroupForm.slug" required />
+                </label>
+                <label class="field compact-field">
+                  <span>Name</span>
+                  <input v-model="editGroupForm.name" required />
+                </label>
+                <label class="field compact-field">
+                  <span>Description</span>
+                  <input v-model="editGroupForm.description" />
+                </label>
+                <div class="inline-actions">
+                  <button
+                    class="ghost-button compact-button"
+                    type="button"
+                    @click="resetGroupEditForm()"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    class="compact-button"
+                    type="button"
+                    @click="updateGroup()"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+              <div v-if="editingGroupId !== group.id" class="inline-actions">
+                <button
+                  class="ghost-button compact-button"
+                  type="button"
+                  @click="startGroupEditing(group)"
+                >
+                  Edit
+                </button>
+                <button class="remove-button" @click="deleteGroup(group.id)">
+                  Remove
+                </button>
+              </div>
+            </li>
+          </ul>
         </section>
 
         <section class="panel-card">
@@ -151,14 +424,80 @@ onMounted(() => {
           <p v-if="loading" class="muted">Loading users...</p>
           <ul v-else-if="users.length" class="user-list">
             <li v-for="user in users" :key="user.id" class="user-item">
-              <div>
+              <div v-if="editingUserId !== user.id">
                 <strong>{{ user.name }}</strong>
                 <p>{{ user.email }}</p>
-                <p class="group-label">{{ user.group_name || "No group" }}</p>
+                <p class="group-label">
+                  {{
+                    user.group_names?.length
+                      ? user.group_names.join(", ")
+                      : "No group"
+                  }}
+                </p>
               </div>
-              <button class="remove-button" @click="removeUser(user.id)">
-                Remove
-              </button>
+              <div v-else class="edit-form">
+                <label class="field compact-field">
+                  <span>First name</span>
+                  <input v-model="editForm.first_name" required />
+                </label>
+                <label class="field compact-field">
+                  <span>Last name</span>
+                  <input v-model="editForm.last_name" required />
+                </label>
+                <label class="field compact-field">
+                  <span>Email</span>
+                  <input v-model="editForm.email" type="email" required />
+                </label>
+                <label class="field compact-field">
+                  <span>Password</span>
+                  <input
+                    v-model="editForm.password"
+                    type="password"
+                    placeholder="Leave blank to keep current"
+                  />
+                </label>
+                <label class="field compact-field">
+                  <span>Groups</span>
+                  <select v-model="editForm.group_ids" multiple size="4">
+                    <option
+                      v-for="group in groups"
+                      :key="group.id"
+                      :value="Number(group.id)"
+                    >
+                      {{ group.name }}
+                    </option>
+                  </select>
+                </label>
+                <div class="inline-actions">
+                  <button
+                    class="ghost-button compact-button"
+                    type="button"
+                    @click="resetEditForm()"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    class="compact-button"
+                    type="button"
+                    @click="updateUser()"
+                    :disabled="pending"
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+              <div v-if="editingUserId !== user.id" class="inline-actions">
+                <button
+                  class="ghost-button compact-button"
+                  type="button"
+                  @click="startEditing(user)"
+                >
+                  Edit
+                </button>
+                <button class="remove-button" @click="removeUser(user.id)">
+                  Remove
+                </button>
+              </div>
             </li>
           </ul>
           <p v-else class="muted">No users found yet.</p>
