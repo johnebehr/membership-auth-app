@@ -8,6 +8,10 @@ vi.mock("../server/utils/database.js", () => ({
   getDatabasePool: mockGetDatabasePool,
 }));
 
+vi.mock("../../server/utils/database.js", () => ({
+  getDatabasePool: mockGetDatabasePool,
+}));
+
 describe("database-backed user management flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -21,21 +25,19 @@ describe("database-backed user management flow", () => {
     });
   });
 
-  it("persists a created user with multiple group memberships and returns them to the client", async () => {
+  it("persists a created user with admin access and returns it to the client", async () => {
     const pool = {
       query: vi
         .fn()
         .mockResolvedValueOnce([{ insertId: 42 }])
-        .mockResolvedValueOnce([{}])
         .mockResolvedValueOnce([
           [
             {
               id: 42,
               name: "Casey Test",
               email: "casey@example.com",
-              group_ids: "2,3",
-              group_names: "Membership,Accounting",
-              group_slugs: "membership,accounting",
+              is_admin: 1,
+              auto_logout_minutes: 18,
             },
           ],
         ]),
@@ -52,7 +54,8 @@ describe("database-backed user management flow", () => {
         last_name: "Test",
         email: "casey@example.com",
         password: "StrongPassword123!",
-        group_ids: [2, 3],
+        is_admin: true,
+        auto_logout_minutes: 18,
       },
     });
 
@@ -61,15 +64,14 @@ describe("database-backed user management flow", () => {
       id: 42,
       name: "Casey Test",
       email: "casey@example.com",
-      group_ids: [2, 3],
-      group_names: ["Membership", "Accounting"],
-      group_slugs: ["membership", "accounting"],
+      is_admin: true,
+      auto_logout_minutes: 18,
     });
   });
 
   it("orders users by last name then first name when listing them", async () => {
     const pool = {
-      query: vi.fn().mockResolvedValueOnce([[]]).mockResolvedValueOnce([[]]),
+      query: vi.fn().mockResolvedValueOnce([[]]),
     };
 
     mockGetDatabasePool.mockResolvedValue(pool);
@@ -86,21 +88,18 @@ describe("database-backed user management flow", () => {
     );
   });
 
-  it("persists a created user with the selected group memberships when creating a user", async () => {
+  it("persists a created user with the selected admin flag when creating a user", async () => {
     const pool = {
       query: vi
         .fn()
         .mockResolvedValueOnce([{ insertId: 42 }])
-        .mockResolvedValueOnce([{}])
         .mockResolvedValueOnce([
           [
             {
               id: 42,
               name: "Casey Test",
               email: "casey@example.com",
-              group_ids: "2,3",
-              group_names: "Membership,Accounting",
-              group_slugs: "membership,accounting",
+              is_admin: 1,
             },
           ],
         ]),
@@ -117,28 +116,21 @@ describe("database-backed user management flow", () => {
         last_name: "Test",
         email: "casey@example.com",
         password: "StrongPassword123!",
-        group_ids: [2, 3],
+        is_admin: true,
       },
     });
 
     expect(result.ok).toBe(true);
     expect(pool.query).toHaveBeenCalledWith(
-      "INSERT INTO user_group_memberships (user_id, group_id) VALUES ?",
-      [
-        [
-          [42, 2],
-          [42, 3],
-        ],
-      ],
+      expect.stringContaining("INSERT INTO users"),
+      expect.any(Array),
     );
   });
 
-  it("updates an existing user and their memberships", async () => {
+  it("updates an existing user and their admin flag", async () => {
     const pool = {
       query: vi
         .fn()
-        .mockResolvedValueOnce([{}])
-        .mockResolvedValueOnce([{}])
         .mockResolvedValueOnce([{}])
         .mockResolvedValueOnce([
           [
@@ -146,9 +138,7 @@ describe("database-backed user management flow", () => {
               id: 42,
               name: "Casey Test",
               email: "casey@example.com",
-              group_ids: "2,3",
-              group_names: "Membership,Accounting",
-              group_slugs: "membership,accounting",
+              is_admin: 1,
             },
           ],
         ]),
@@ -165,7 +155,7 @@ describe("database-backed user management flow", () => {
         first_name: "Casey",
         last_name: "Test",
         email: "casey@example.com",
-        group_ids: [2, 3],
+        is_admin: true,
       },
     });
 
@@ -174,24 +164,64 @@ describe("database-backed user management flow", () => {
       id: 42,
       name: "Casey Test",
       email: "casey@example.com",
-      group_ids: [2, 3],
-      group_names: ["Membership", "Accounting"],
-      group_slugs: ["membership", "accounting"],
+      is_admin: true,
     });
   });
 
-  it("returns the available groups from the database for the create-user select", async () => {
+  it("persists auto_logout_minutes when updating an existing user", async () => {
     const pool = {
       query: vi
         .fn()
-        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([{}])
         .mockResolvedValueOnce([
           [
-            { id: 1, name: "Admin" },
-            { id: 2, name: "Membership" },
-            { id: 3, name: "Organizer" },
+            {
+              id: 42,
+              name: "Casey Test",
+              email: "casey@example.com",
+              is_admin: 1,
+              auto_logout_minutes: 18,
+            },
           ],
         ]),
+    };
+
+    mockGetDatabasePool.mockResolvedValue(pool);
+
+    const { default: usersPutHandler } =
+      await import("../../server/api/users/[id].put.js");
+
+    const result = await usersPutHandler({
+      context: { params: { id: 42 } },
+      body: {
+        first_name: "Casey",
+        last_name: "Test",
+        email: "casey@example.com",
+        is_admin: true,
+        auto_logout_minutes: 18,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.user).toMatchObject({
+      id: 42,
+      auto_logout_minutes: 18,
+    });
+    expect(pool.query).toHaveBeenCalledWith(
+      expect.stringContaining("auto_logout_minutes"),
+      expect.any(Array),
+    );
+  });
+
+  it("returns the available users from the database for the management page", async () => {
+    const pool = {
+      query: vi.fn().mockResolvedValueOnce([
+        [
+          { id: 1, name: "Admin", is_admin: 1 },
+          { id: 2, name: "Membership", is_admin: 0 },
+          { id: 3, name: "Organizer", is_admin: 0 },
+        ],
+      ]),
     };
 
     mockGetDatabasePool.mockResolvedValue(pool);
@@ -201,14 +231,14 @@ describe("database-backed user management flow", () => {
 
     const result = await usersGetHandler({});
 
-    expect(result.groups).toEqual([
-      { id: 1, name: "Admin" },
-      { id: 2, name: "Membership" },
-      { id: 3, name: "Organizer" },
+    expect(result.users).toEqual([
+      { id: 1, name: "Admin", is_admin: true, auto_logout_minutes: 10 },
+      { id: 2, name: "Membership", is_admin: false, auto_logout_minutes: 10 },
+      { id: 3, name: "Organizer", is_admin: false, auto_logout_minutes: 10 },
     ]);
   });
 
-  it("returns group details when a user logs in", async () => {
+  it("returns admin state when a user logs in", async () => {
     const pool = {
       query: vi.fn().mockResolvedValueOnce([
         [
@@ -217,9 +247,7 @@ describe("database-backed user management flow", () => {
             name: "Casey",
             email: "casey@example.com",
             password_hash: "StrongPassword123!",
-            group_id: 2,
-            group_slug: "membership",
-            group_name: "Membership",
+            is_admin: 1,
           },
         ],
       ]),
@@ -239,9 +267,8 @@ describe("database-backed user management flow", () => {
       id: 7,
       name: "Casey",
       email: "casey@example.com",
-      group_id: 2,
-      group_name: "Membership",
-      group_slug: "membership",
+      is_admin: true,
+      role: "Admin",
     });
   });
 
@@ -257,9 +284,7 @@ describe("database-backed user management flow", () => {
             name: "Casey",
             email: "casey@example.com",
             password_hash: "StrongPassword123!",
-            group_id: 2,
-            group_slug: "membership",
-            group_name: "Membership",
+            is_admin: 1,
           },
         ],
       ]),
@@ -299,9 +324,7 @@ describe("database-backed user management flow", () => {
             name: "Casey",
             email: "casey@example.com",
             password_hash: "StrongPassword123!",
-            group_id: 2,
-            group_slug: "membership",
-            group_name: "Membership",
+            is_admin: 1,
           },
         ],
       ]),

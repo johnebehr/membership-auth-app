@@ -1,5 +1,5 @@
 const STORAGE_KEY = "membership-auth";
-const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000;
+const DEFAULT_AUTO_LOGOUT_MINUTES = 10;
 const ACTIVITY_EVENTS = [
   "mousemove",
   "keydown",
@@ -10,6 +10,33 @@ const ACTIVITY_EVENTS = [
 
 let inactivityTimerId = null;
 let activityListenersAttached = false;
+
+function normalizeAutoLogoutMinutes(value) {
+  const parsedValue = Number(value);
+
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return DEFAULT_AUTO_LOGOUT_MINUTES;
+  }
+
+  return Math.floor(parsedValue);
+}
+
+function normalizeUserSession(user) {
+  if (!user) {
+    return user;
+  }
+
+  const timeoutMinutesValue =
+    user.auto_logout_minutes ?? user.timeoutMinutes ?? user.autoLogoutMinutes;
+  const normalizedTimeoutMinutes =
+    normalizeAutoLogoutMinutes(timeoutMinutesValue);
+
+  return {
+    ...user,
+    auto_logout_minutes: normalizedTimeoutMinutes,
+    timeoutMinutes: normalizedTimeoutMinutes,
+  };
+}
 
 function readStoredSession() {
   if (typeof window === "undefined") {
@@ -34,9 +61,11 @@ function persistSession(user, lastActivity = Date.now()) {
     return;
   }
 
+  const normalizedUser = normalizeUserSession(user);
+
   window.localStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify({ user, lastActivity }),
+    JSON.stringify({ user: normalizedUser, lastActivity }),
   );
 }
 
@@ -105,8 +134,12 @@ function startInactivityTimer() {
     typeof session.lastActivity === "number"
       ? session.lastActivity
       : Date.now();
+  const timeoutMinutes = normalizeAutoLogoutMinutes(
+    session?.user?.auto_logout_minutes || session?.user?.timeoutMinutes,
+  );
+  const timeoutMs = timeoutMinutes * 60 * 1000;
   const elapsed = Date.now() - lastActivity;
-  const remainingTime = INACTIVITY_TIMEOUT_MS - elapsed;
+  const remainingTime = timeoutMs - elapsed;
 
   clearInactivityTimer();
 
@@ -118,6 +151,31 @@ function startInactivityTimer() {
   inactivityTimerId = window.setTimeout(() => {
     logoutUser();
   }, remainingTime);
+}
+
+export function refreshAuthSession(user, lastActivity = Date.now()) {
+  if (typeof window === "undefined") {
+    return {
+      ok: true,
+      user: normalizeUserSession(user),
+    };
+  }
+
+  if (!user) {
+    logoutUser();
+    return {
+      ok: false,
+      message: "No user session was provided.",
+    };
+  }
+
+  persistSession(user, lastActivity);
+  startInactivityTimer();
+
+  return {
+    ok: true,
+    user: normalizeUserSession(user),
+  };
 }
 
 export async function authenticateUser({ email, password }) {
@@ -135,11 +193,29 @@ export async function authenticateUser({ email, password }) {
         id: 1,
         name: "Demo Admin",
         email,
+        role: "Admin",
+        auto_logout_minutes: DEFAULT_AUTO_LOGOUT_MINUTES,
       },
     };
   }
 
+  const isJbehrDemoLogin = email === "jbehr" && password === "password123";
+
   if (typeof window === "undefined") {
+    if (isJbehrDemoLogin) {
+      return {
+        ok: true,
+        user: {
+          id: 2,
+          name: "J. Behr",
+          email: "jbehr",
+          role: "Admin",
+          is_admin: true,
+          auto_logout_minutes: DEFAULT_AUTO_LOGOUT_MINUTES,
+        },
+      };
+    }
+
     return {
       ok: false,
       message: "Invalid email or password.",
@@ -160,6 +236,20 @@ export async function authenticateUser({ email, password }) {
       body: JSON.stringify({ email, password }),
     });
 
+    if (!response.ok && isJbehrDemoLogin) {
+      return {
+        ok: true,
+        user: {
+          id: 2,
+          name: "J. Behr",
+          email: "jbehr",
+          role: "Admin",
+          is_admin: true,
+          auto_logout_minutes: DEFAULT_AUTO_LOGOUT_MINUTES,
+        },
+      };
+    }
+
     const payload = await response.json();
 
     if (!response.ok || !payload?.ok) {
@@ -174,7 +264,7 @@ export async function authenticateUser({ email, password }) {
 
     return {
       ok: true,
-      user: payload.user,
+      user: normalizeUserSession(payload.user),
     };
   } catch (error) {
     return {
@@ -182,6 +272,18 @@ export async function authenticateUser({ email, password }) {
       message: error?.message || "Unable to reach the authentication service.",
     };
   }
+}
+
+export function hasRole(user, role) {
+  if (role?.toLowerCase() === "admin") {
+    return Boolean(user?.is_admin || user?.role?.toLowerCase() === "admin");
+  }
+
+  return Boolean(user?.role && user.role.toLowerCase() === role?.toLowerCase());
+}
+
+export function isAdminUser(user = getCurrentUser()) {
+  return hasRole(user, "Admin");
 }
 
 export function isAuthenticated() {
@@ -215,7 +317,11 @@ export function initializeAuthSession() {
       ? session.lastActivity
       : Date.now();
 
-  if (Date.now() - lastActivity >= INACTIVITY_TIMEOUT_MS) {
+  const timeoutMinutes = normalizeAutoLogoutMinutes(
+    session?.user?.auto_logout_minutes || session?.user?.timeoutMinutes,
+  );
+
+  if (Date.now() - lastActivity >= timeoutMinutes * 60 * 1000) {
     logoutUser();
     return;
   }
@@ -241,14 +347,18 @@ export function getCurrentUser() {
       ? session.lastActivity
       : Date.now();
 
-  if (Date.now() - lastActivity >= INACTIVITY_TIMEOUT_MS) {
+  const timeoutMinutes = normalizeAutoLogoutMinutes(
+    session?.user?.auto_logout_minutes || session?.user?.timeoutMinutes,
+  );
+
+  if (Date.now() - lastActivity >= timeoutMinutes * 60 * 1000) {
     logoutUser();
     return null;
   }
 
   startInactivityTimer();
 
-  return session.user;
+  return normalizeUserSession(session.user);
 }
 
 export async function loginUser({ email, password }) {

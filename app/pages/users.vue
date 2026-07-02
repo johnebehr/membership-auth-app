@@ -1,29 +1,30 @@
 <script setup>
 import { onMounted, ref } from "vue";
+import { refreshAuthSession } from "../composables/useAuth.js";
 
 const users = ref([]);
-const groups = ref([]);
 const loading = ref(true);
 const error = ref("");
-const groupForm = ref({ slug: "", name: "", description: "" });
-const groupPending = ref(false);
-const editingGroupId = ref(null);
-const editGroupForm = ref({ slug: "", name: "", description: "" });
+const successMessage = ref("");
 const form = ref({
   first_name: "",
   last_name: "",
   email: "",
   password: "",
-  group_ids: [],
+  is_admin: false,
+  auto_logout_minutes: 10,
 });
 const pending = ref(false);
 const editingUserId = ref(null);
+const editingUserSnapshot = ref(null);
+let successToastTimer = null;
 const editForm = ref({
   first_name: "",
   last_name: "",
   email: "",
   password: "",
-  group_ids: [],
+  is_admin: false,
+  auto_logout_minutes: 10,
 });
 
 function resetCreateForm() {
@@ -32,28 +33,30 @@ function resetCreateForm() {
     last_name: "",
     email: "",
     password: "",
-    group_ids: [],
+    is_admin: false,
+    auto_logout_minutes: 10,
   };
 }
 
 function resetEditForm() {
   editingUserId.value = null;
+  editingUserSnapshot.value = null;
   editForm.value = {
     first_name: "",
     last_name: "",
     email: "",
     password: "",
-    group_ids: [],
+    is_admin: false,
+    auto_logout_minutes: 10,
   };
 }
 
-function resetGroupForm() {
-  groupForm.value = { slug: "", name: "", description: "" };
-}
+function formatAutoLogoutLabel(user) {
+  const value = Number(user?.auto_logout_minutes ?? user?.timeoutMinutes ?? 10);
+  const normalizedValue =
+    Number.isFinite(value) && value > 0 ? Math.floor(value) : 10;
 
-function resetGroupEditForm() {
-  editingGroupId.value = null;
-  editGroupForm.value = { slug: "", name: "", description: "" };
+  return `${normalizedValue} minute${normalizedValue === 1 ? "" : "s"}`;
 }
 
 async function loadUsers() {
@@ -69,7 +72,6 @@ async function loadUsers() {
     }
 
     users.value = payload.users || [];
-    groups.value = payload.groups || [];
   } catch (err) {
     error.value = err?.message || "Unable to load users.";
   } finally {
@@ -91,11 +93,20 @@ async function createUser() {
   pending.value = true;
   error.value = "";
 
+  const autoLogoutMinutes = Number(form.value.auto_logout_minutes);
+  const normalizedAutoLogoutMinutes =
+    Number.isFinite(autoLogoutMinutes) && autoLogoutMinutes > 0
+      ? Math.floor(autoLogoutMinutes)
+      : 10;
+
   try {
     const response = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form.value),
+      body: JSON.stringify({
+        ...form.value,
+        auto_logout_minutes: normalizedAutoLogoutMinutes,
+      }),
     });
     const payload = await response.json();
 
@@ -127,102 +138,26 @@ async function removeUser(id) {
   }
 }
 
-async function createGroup() {
-  if (!groupForm.value.slug.trim() || !groupForm.value.name.trim()) {
-    error.value = "Please complete the group fields.";
-    return;
-  }
-
-  groupPending.value = true;
-  error.value = "";
-
-  try {
-    const response = await fetch("/api/groups", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(groupForm.value),
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload?.message || "Unable to create group.");
-    }
-
-    resetGroupForm();
-    await loadUsers();
-  } catch (err) {
-    error.value = err?.message || "Unable to create group.";
-  } finally {
-    groupPending.value = false;
-  }
-}
-
-function startGroupEditing(group) {
-  editingGroupId.value = group.id;
-  editGroupForm.value = {
-    slug: group.slug || "",
-    name: group.name || "",
-    description: group.description || "",
-  };
-}
-
-async function updateGroup() {
-  if (!editingGroupId.value) {
-    return;
-  }
-
-  if (!editGroupForm.value.slug.trim() || !editGroupForm.value.name.trim()) {
-    error.value = "Please complete the group fields.";
-    return;
-  }
-
-  groupPending.value = true;
-  error.value = "";
-
-  try {
-    const response = await fetch(`/api/groups/${editingGroupId.value}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editGroupForm.value),
-    });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload?.message || "Unable to update group.");
-    }
-
-    resetGroupEditForm();
-    await loadUsers();
-  } catch (err) {
-    error.value = err?.message || "Unable to update group.";
-  } finally {
-    groupPending.value = false;
-  }
-}
-
-async function deleteGroup(id) {
-  try {
-    const response = await fetch(`/api/groups/${id}`, { method: "DELETE" });
-    const payload = await response.json();
-
-    if (!response.ok) {
-      throw new Error(payload?.message || "Unable to remove group.");
-    }
-
-    await loadUsers();
-  } catch (err) {
-    error.value = err?.message || "Unable to remove group.";
-  }
-}
-
 function startEditing(user) {
   editingUserId.value = user.id;
+  editingUserSnapshot.value = {
+    first_name: user.first_name || user.name?.split(" ")[0] || "",
+    last_name: user.last_name || user.name?.split(" ").slice(1).join(" ") || "",
+    email: user.email || "",
+    is_admin: Boolean(user.is_admin),
+    auto_logout_minutes: Number(
+      user.auto_logout_minutes ?? user.timeoutMinutes ?? 10,
+    ),
+  };
   editForm.value = {
     first_name: user.first_name || user.name?.split(" ")[0] || "",
     last_name: user.last_name || user.name?.split(" ").slice(1).join(" ") || "",
     email: user.email || "",
     password: "",
-    group_ids: user.group_ids || [],
+    is_admin: Boolean(user.is_admin),
+    auto_logout_minutes: Number(
+      user.auto_logout_minutes ?? user.timeoutMinutes ?? 10,
+    ),
   };
 }
 
@@ -242,18 +177,96 @@ async function updateUser() {
 
   pending.value = true;
   error.value = "";
+  successMessage.value = "";
+  if (successToastTimer) {
+    clearTimeout(successToastTimer);
+  }
+
+  const autoLogoutMinutes = Number(editForm.value.auto_logout_minutes);
+  const normalizedAutoLogoutMinutes =
+    Number.isFinite(autoLogoutMinutes) && autoLogoutMinutes > 0
+      ? Math.floor(autoLogoutMinutes)
+      : 10;
 
   try {
     const response = await fetch(`/api/users/${editingUserId.value}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(editForm.value),
+      body: JSON.stringify({
+        ...editForm.value,
+        auto_logout_minutes: normalizedAutoLogoutMinutes,
+      }),
     });
     const payload = await response.json();
 
     if (!response.ok) {
       throw new Error(payload?.message || "Unable to update user.");
     }
+
+    const currentSession = window.localStorage.getItem("membership-auth");
+    if (currentSession) {
+      try {
+        const storedSession = JSON.parse(currentSession);
+        if (storedSession?.user?.id === editingUserId.value) {
+          refreshAuthSession(
+            {
+              ...storedSession.user,
+              auto_logout_minutes: normalizedAutoLogoutMinutes,
+              timeoutMinutes: normalizedAutoLogoutMinutes,
+            },
+            Date.now(),
+          );
+        }
+      } catch {
+        // Ignore session refresh failures and fall back to the next login.
+      }
+    }
+
+    const previousValues = editingUserSnapshot.value || {};
+    const changedFields = [];
+
+    if (
+      editForm.value.first_name.trim() !== (previousValues.first_name || "")
+    ) {
+      changedFields.push(`first name to “${editForm.value.first_name.trim()}”`);
+    }
+    if (editForm.value.last_name.trim() !== (previousValues.last_name || "")) {
+      changedFields.push(`last name to “${editForm.value.last_name.trim()}”`);
+    }
+    if (editForm.value.email.trim() !== (previousValues.email || "")) {
+      changedFields.push(`email to “${editForm.value.email.trim()}”`);
+    }
+    if (
+      normalizedAutoLogoutMinutes !==
+      Number(previousValues.auto_logout_minutes ?? 10)
+    ) {
+      changedFields.push(
+        `auto-logout to ${normalizedAutoLogoutMinutes} minute${normalizedAutoLogoutMinutes === 1 ? "" : "s"}`,
+      );
+    }
+    if (Boolean(editForm.value.is_admin) !== Boolean(previousValues.is_admin)) {
+      changedFields.push(
+        `admin access to ${Boolean(editForm.value.is_admin) ? "enabled" : "disabled"}`,
+      );
+    }
+
+    const userName =
+      payload.user?.name ||
+      `${editForm.value.first_name.trim()} ${editForm.value.last_name.trim()}`.trim() ||
+      "the selected user";
+
+    if (changedFields.length) {
+      successMessage.value = `Updated ${userName}: ${changedFields.join(", ")}.`;
+    } else {
+      successMessage.value = `Updated ${userName}.`;
+    }
+
+    if (successToastTimer) {
+      clearTimeout(successToastTimer);
+    }
+    successToastTimer = window.setTimeout(() => {
+      successMessage.value = "";
+    }, 4000);
 
     resetEditForm();
     await loadUsers();
@@ -314,104 +327,26 @@ onMounted(() => {
               />
             </label>
             <label class="field">
-              <span>Groups</span>
-              <select v-model="form.group_ids" multiple size="4">
-                <option
-                  v-for="group in groups"
-                  :key="group.id"
-                  :value="Number(group.id)"
-                >
-                  {{ group.name }}
-                </option>
-              </select>
+              <span>Auto-logout (minutes)</span>
+              <input
+                v-model.number="form.auto_logout_minutes"
+                type="number"
+                min="1"
+                step="1"
+                placeholder="10"
+              />
+            </label>
+            <label class="field">
+              <span>Admin access</span>
+              <label class="checkbox-row">
+                <input v-model="form.is_admin" type="checkbox" />
+                <span>Grant admin privileges</span>
+              </label>
             </label>
             <button type="submit" :disabled="pending">
               {{ pending ? "Creating..." : "Create user" }}
             </button>
           </form>
-        </section>
-
-        <section class="panel-card">
-          <h2>Groups</h2>
-          <form class="form" @submit.prevent="createGroup">
-            <label class="field">
-              <span>Slug</span>
-              <input
-                v-model="groupForm.slug"
-                placeholder="membership"
-                required
-              />
-            </label>
-            <label class="field">
-              <span>Name</span>
-              <input
-                v-model="groupForm.name"
-                placeholder="Membership"
-                required
-              />
-            </label>
-            <label class="field">
-              <span>Description</span>
-              <input v-model="groupForm.description" placeholder="Optional" />
-            </label>
-            <button type="submit" :disabled="groupPending">
-              {{ groupPending ? "Saving..." : "Create group" }}
-            </button>
-          </form>
-
-          <ul v-if="groups.length" class="user-list">
-            <li v-for="group in groups" :key="group.id" class="user-item">
-              <div v-if="editingGroupId !== group.id">
-                <strong>{{ group.name }}</strong>
-                <p>{{ group.slug }}</p>
-                <p class="group-label">
-                  {{ group.description || "No description" }}
-                </p>
-              </div>
-              <div v-else class="edit-form">
-                <label class="field compact-field">
-                  <span>Slug</span>
-                  <input v-model="editGroupForm.slug" required />
-                </label>
-                <label class="field compact-field">
-                  <span>Name</span>
-                  <input v-model="editGroupForm.name" required />
-                </label>
-                <label class="field compact-field">
-                  <span>Description</span>
-                  <input v-model="editGroupForm.description" />
-                </label>
-                <div class="inline-actions">
-                  <button
-                    class="ghost-button compact-button"
-                    type="button"
-                    @click="resetGroupEditForm()"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    class="compact-button"
-                    type="button"
-                    @click="updateGroup()"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-              <div v-if="editingGroupId !== group.id" class="inline-actions">
-                <button
-                  class="ghost-button compact-button"
-                  type="button"
-                  @click="startGroupEditing(group)"
-                >
-                  Edit
-                </button>
-                <button class="remove-button" @click="deleteGroup(group.id)">
-                  Remove
-                </button>
-              </div>
-            </li>
-          </ul>
         </section>
 
         <section class="panel-card">
@@ -421,19 +356,28 @@ onMounted(() => {
           </div>
 
           <p v-if="error" class="error">{{ error }}</p>
+          <div
+            v-if="successMessage"
+            class="toast-banner"
+            role="status"
+            aria-live="polite"
+          >
+            {{ successMessage }}
+          </div>
           <p v-if="loading" class="muted">Loading users...</p>
           <ul v-else-if="users.length" class="user-list">
             <li v-for="user in users" :key="user.id" class="user-item">
-              <div v-if="editingUserId !== user.id">
+              <div v-if="editingUserId !== user.id" class="user-summary">
                 <strong>{{ user.name }}</strong>
                 <p>{{ user.email }}</p>
-                <p class="group-label">
-                  {{
-                    user.group_names?.length
-                      ? user.group_names.join(", ")
-                      : "No group"
-                  }}
-                </p>
+                <div class="meta-row">
+                  <span class="group-label">
+                    {{ user.is_admin ? "Admin" : "User" }}
+                  </span>
+                  <span class="timeout-pill">
+                    Auto-logout: {{ formatAutoLogoutLabel(user) }}
+                  </span>
+                </div>
               </div>
               <div v-else class="edit-form">
                 <label class="field compact-field">
@@ -457,16 +401,21 @@ onMounted(() => {
                   />
                 </label>
                 <label class="field compact-field">
-                  <span>Groups</span>
-                  <select v-model="editForm.group_ids" multiple size="4">
-                    <option
-                      v-for="group in groups"
-                      :key="group.id"
-                      :value="Number(group.id)"
-                    >
-                      {{ group.name }}
-                    </option>
-                  </select>
+                  <span>Auto-logout (minutes)</span>
+                  <input
+                    v-model.number="editForm.auto_logout_minutes"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="10"
+                  />
+                </label>
+                <label class="field compact-field">
+                  <span>Admin access</span>
+                  <label class="checkbox-row">
+                    <input v-model="editForm.is_admin" type="checkbox" />
+                    <span>Grant admin privileges</span>
+                  </label>
                 </label>
                 <div class="inline-actions">
                   <button
@@ -512,6 +461,21 @@ onMounted(() => {
   min-height: 100vh;
   padding: 2rem;
   background: var(--bg-light);
+}
+
+.toast-banner {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1100;
+  max-width: min(420px, calc(100vw - 2rem));
+  padding: 0.8rem 1rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2f6e4a, #3a8a5c);
+  color: #fff;
+  box-shadow: 0 14px 30px rgba(15, 37, 55, 0.18);
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .panel {
@@ -608,6 +572,14 @@ button {
   text-decoration: none;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
 .list-head {
   display: flex;
   justify-content: space-between;
@@ -652,10 +624,33 @@ button {
   color: var(--text-muted);
 }
 
+.user-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
 .group-label {
   font-size: 0.9rem;
   color: var(--secondary-teal);
   font-weight: 600;
+}
+
+.timeout-pill {
+  border-radius: 999px;
+  padding: 0.25rem 0.6rem;
+  background: rgba(45, 127, 132, 0.12);
+  color: var(--secondary-teal);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .remove-button {
