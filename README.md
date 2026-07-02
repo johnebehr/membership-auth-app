@@ -1,6 +1,6 @@
 # Membership App
 
-This project now includes a basic MySQL-backed API layer for authentication, user management, and starter role-based access controls.
+This project now includes a basic MySQL-backed API layer for authentication, user management, and simple admin-or-user access control.
 
 The backend remains SQL-first: there are no ORM abstractions or migration tooling in this MVP. Database changes should be applied directly with SQL scripts when needed.
 
@@ -27,7 +27,7 @@ These values are used for the current development/staging environment and can be
 ## Database setup
 
 1. Apply the SQL in [app/server/utils/schema.sql](app/server/utils/schema.sql) to your MySQL database.
-2. Confirm the users table and starter user_groups rows exist.
+2. Confirm the users table exists and includes the is_admin column.
 3. Start the app with:
 
 ```bash
@@ -41,25 +41,23 @@ npm run dev
 - POST /api/users
 - DELETE /api/users/:id
 
-## Starter roles
+## Access model
 
-The current schema includes three starter groups:
+The current schema uses a simple access model:
 
-- Admin: can manage users and membership workflows
-- Membership: can manage memberships but cannot create new users
-- Organizer: lookup-only access
+- Admin: can manage users and the core app experience
+- User: can access the app without administrative controls
 
 ## MVP data model notes
 
 The initial membership app will focus on a small set of core entities:
 
 - User: authenticated account for app access
-- User group: role-based access control for users
 - Member: a person tracked by the membership system
 
 Suggested initial relationships:
 
-- One user belongs to one group
+- One user is either an admin or a standard user
 - One member may be linked to one primary user account for administration
 - Membership status can be tracked for each member as part of the first feature set
 

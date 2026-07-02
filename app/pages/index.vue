@@ -1,29 +1,28 @@
 <script setup>
 import { computed } from "vue";
-import { getCurrentUser, logoutUser } from "~/composables/useAuth";
+import { getCurrentUser, isAdminUser } from "~/composables/useAuth";
 
-const router = useRouter();
 const user = computed(() => getCurrentUser());
-
-function signOut() {
-  logoutUser();
-  router.push("/login");
-}
+const isAdmin = computed(() => isAdminUser(user.value));
 </script>
 
 <template>
   <div class="page-shell">
+    <AppHeader />
     <div class="panel">
       <div class="panel-head">
         <div>
           <p class="eyebrow">Membership Management</p>
           <h1>Welcome back, {{ user?.name || "there" }}</h1>
           <p class="subtitle">
-            Manage members, renewals, and communications from one place.
+            Review the latest activity and jump into your most common tasks.
           </p>
         </div>
-        <button class="ghost-button" @click="signOut">Log out</button>
+        <div class="status-pill">
+          {{ isAdmin ? "Admin access" : "Standard access" }}
+        </div>
       </div>
+
       <div class="card-grid">
         <div class="stat-card">
           <strong>1,248</strong>
@@ -33,10 +32,25 @@ function signOut() {
           <strong>96%</strong>
           <span>Renewal rate</span>
         </div>
+        <div class="stat-card">
+          <strong>12</strong>
+          <span>Pending follow-ups</span>
+        </div>
       </div>
 
-      <div class="action-row">
-        <NuxtLink class="ghost-button" to="/users">Manage users</NuxtLink>
+      <div class="action-card">
+        <h2>Quick actions</h2>
+        <div class="action-list">
+          <NuxtLink to="/members" class="action-link"
+            >Add a new member</NuxtLink
+          >
+          <NuxtLink v-if="isAdmin" to="/users" class="action-link">
+            Manage user accounts
+          </NuxtLink>
+          <NuxtLink to="/locals" class="action-link"
+            >Review local records</NuxtLink
+          >
+        </div>
       </div>
     </div>
   </div>
@@ -45,10 +59,12 @@ function signOut() {
 <style scoped>
 .page-shell {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
   padding: 2rem;
   background: var(--bg-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
 }
 
 .panel {
@@ -65,6 +81,15 @@ function signOut() {
   justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.5rem;
+}
+
+.status-pill {
+  padding: 0.5rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(45, 127, 132, 0.12);
+  color: var(--secondary-teal);
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .eyebrow {
@@ -84,16 +109,6 @@ h1 {
 .subtitle {
   color: var(--text-muted);
   margin-bottom: 0;
-}
-
-.ghost-button {
-  border: 1px solid rgba(15, 37, 55, 0.12);
-  background: var(--bg-white);
-  color: var(--primary-navy);
-  border-radius: 999px;
-  padding: 0.7rem 1rem;
-  font-weight: 700;
-  cursor: pointer;
 }
 
 .card-grid {
@@ -123,5 +138,38 @@ h1 {
 
 .stat-card span {
   color: var(--text-muted);
+}
+
+.action-card {
+  margin-top: 1.25rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: 16px;
+  background: var(--bg-light);
+  border: 1px solid rgba(15, 37, 55, 0.06);
+}
+
+.action-card h2 {
+  margin: 0 0 0.8rem;
+  color: var(--primary-navy);
+  font-size: 1.05rem;
+}
+
+.action-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 0.95rem;
+  border-radius: 999px;
+  background: var(--bg-white);
+  color: var(--primary-navy);
+  font-weight: 700;
+  text-decoration: none;
+  border: 1px solid rgba(15, 37, 55, 0.1);
 }
 </style>

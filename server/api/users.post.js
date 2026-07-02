@@ -31,47 +31,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const pool = await getDatabasePool();
-  const groupIds = Array.isArray(body.group_ids)
-    ? body.group_ids
-        .map((groupId) => Number(groupId))
-        .filter((groupId) => Number.isInteger(groupId) && groupId > 0)
-    : [];
-
-  if (body.group_ids && !groupIds.length) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: "Group selection is invalid.",
-    });
-  }
-
+  const isAdmin = Boolean(body?.is_admin);
   const passwordHash = hashPassword(body.password.trim());
 
   const [insertResult] = await pool.query(
-    "INSERT INTO users (first_name, last_name, email, password_hash, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
-    [firstName, lastName, body.email.trim(), passwordHash],
+    "INSERT INTO users (first_name, last_name, email, password_hash, is_admin, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(), CURRENT_TIMESTAMP())",
+    [firstName, lastName, body.email.trim(), passwordHash, isAdmin ? 1 : 0],
   );
 
-  if (groupIds.length) {
-    const membershipValues = groupIds.map((groupId) => [
-      insertResult.insertId,
-      groupId,
-    ]);
-    await pool.query(
-      "INSERT INTO user_group_memberships (user_id, group_id) VALUES ?",
-      [membershipValues],
-    );
-  }
-
   const [rows] = await pool.query(
-    `SELECT users.id, users.name, users.email,
-            GROUP_CONCAT(user_groups.id ORDER BY user_groups.name SEPARATOR ',') AS group_ids,
-            GROUP_CONCAT(user_groups.name ORDER BY user_groups.name SEPARATOR ',') AS group_names,
-            GROUP_CONCAT(user_groups.slug ORDER BY user_groups.name SEPARATOR ',') AS group_slugs
+    `SELECT users.id, users.name, users.email, users.is_admin
      FROM users
-     LEFT JOIN user_group_memberships ON user_group_memberships.user_id = users.id
-     LEFT JOIN user_groups ON user_groups.id = user_group_memberships.group_id
      WHERE users.id = ?
-     GROUP BY users.id
      LIMIT 1`,
     [insertResult.insertId],
   );
@@ -85,19 +56,13 @@ export default defineEventHandler(async (event) => {
           id: user.id,
           name: user.name,
           email: user.email,
-          group_ids: user.group_ids
-            ? user.group_ids.split(",").map((groupId) => Number(groupId))
-            : [],
-          group_names: user.group_names ? user.group_names.split(",") : [],
-          group_slugs: user.group_slugs ? user.group_slugs.split(",") : [],
+          is_admin: Boolean(user.is_admin),
         }
       : {
           id: insertResult.insertId,
           name: `${firstName} ${lastName}`.trim(),
           email: body.email.trim(),
-          group_ids: [],
-          group_names: [],
-          group_slugs: [],
+          is_admin: isAdmin,
         },
   };
 });

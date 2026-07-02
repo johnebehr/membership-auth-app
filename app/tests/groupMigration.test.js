@@ -8,44 +8,33 @@ vi.mock("../server/utils/database.js", () => ({
   getDatabasePool: mockGetDatabasePool,
 }));
 
-describe("migrateLegacyGroupMemberships", () => {
+describe("migrateLegacyAdminFlags", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("creates memberships for users that are missing them", async () => {
+  it("marks matching users as admins when migrating legacy memberships", async () => {
     const pool = {
       query: vi
         .fn()
-        .mockResolvedValueOnce([
-          [
-            { id: 1, slug: "admin" },
-            { id: 2, slug: "membership" },
-          ],
-        ])
         .mockResolvedValueOnce([[{ id: 1 }]])
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{ affectedRows: 2 }]),
+        .mockResolvedValueOnce([{ affectedRows: 1 }]),
     };
 
     mockGetDatabasePool.mockResolvedValue(pool);
 
-    const { migrateLegacyGroupMemberships } =
+    const { migrateLegacyAdminFlags } =
       await import("../server/utils/migrateLegacyGroupMemberships.js");
 
-    const result = await migrateLegacyGroupMemberships({
-      groupSlugs: ["admin", "membership"],
+    const result = await migrateLegacyAdminFlags({
+      userIds: [1],
+      is_admin: true,
     });
 
-    expect(result.created).toBe(2);
+    expect(result.created).toBe(1);
     expect(pool.query).toHaveBeenCalledWith(
-      "INSERT INTO user_group_memberships (user_id, group_id) VALUES ?",
-      [
-        [
-          [1, 1],
-          [1, 2],
-        ],
-      ],
+      "UPDATE users SET is_admin = ? WHERE id = ?",
+      [1, 1],
     );
   });
 });

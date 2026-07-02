@@ -43,5 +43,6 @@ describe("seedInitialAdminUsers", () => {
     const insertArgs = pool.query.mock.calls[1][1];
     expect(insertArgs[2]).not.toBe("StrongPassword123!");
     expect(insertArgs[2]).toContain("scrypt$");
+    expect(insertArgs[3]).toBe(1);
   });
 });

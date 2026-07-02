@@ -41,5 +41,37 @@
 - Authentication and user identity are the first priorities.
 - Membership, renewal, and communication data will be discussed as the app evolves.
 - MySQL 9 and mysql2 will be used for backend connectivity when the integration work begins.
-- For the initial phase, user accounts and roles should live in the main application database on the database server so they can be managed with the same operational tooling and access controls.
+- For the initial phase, user accounts and admin status should live in the main application database on the database server so they can be managed with the same operational tooling and access controls.
 - If the system grows, we can split authentication and authorization into dedicated schemas or a separate service, but that should be a later architectural decision rather than a default starting point.
+
+## Long-term todo list
+
+- Add member lifecycle tracking with statuses such as Active, Pending, Expired, and Inactive.
+- Add search, filtering, and sorting for members and users.
+- Expand member profile details with phone number, join date, renewal date, and notes.
+- Track activity and audit history for member and user changes.
+- Add bulk actions such as import/export and simple multi-update workflows.
+- Improve reporting with dashboard summaries for active members, pending members, admins, and renewals.
+
+## Implementation roadmap
+
+### Priority 1 - Foundation (High)
+
+- Extend the member data model to store the remaining profile information needed for the membership workflow.
+- Add member status handling and validation for the main lifecycle states.
+- Build a consistent create/edit member experience so forms stay predictable as the app grows.
+
+### Priority 2 - Usability (High)
+
+- Add search, filtering, and sorting to keep member lists usable as data grows.
+- Add dashboard summaries for active members, pending records, and upcoming renewals.
+
+### Priority 3 - Admin workflows (Medium)
+
+- Add activity and audit history for important member and user changes.
+- Add bulk actions such as import/export and simple multi-update workflows.
+
+### Priority 4 - Reporting and scale (Medium/Low)
+
+- Add reporting views for renewals, inactive members, and admin activity.
+- Prepare for future membership workflows such as reminders and communication history.

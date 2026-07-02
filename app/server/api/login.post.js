@@ -22,13 +22,8 @@ function normalizeLoginIdentifier(identifier) {
 }
 
 export function buildLoginQuery({ fallback = false } = {}) {
-  const baseQuery = `SELECT users.id, users.name, users.email, users.password_hash,
-      GROUP_CONCAT(DISTINCT user_groups.id ORDER BY user_groups.name SEPARATOR ',') AS group_ids,
-      GROUP_CONCAT(DISTINCT user_groups.slug ORDER BY user_groups.name SEPARATOR ',') AS group_slugs,
-      GROUP_CONCAT(DISTINCT user_groups.name ORDER BY user_groups.name SEPARATOR ',') AS group_names
+  const baseQuery = `SELECT users.id, users.name, users.email, users.password_hash, users.is_admin, users.auto_logout_minutes
     FROM users
-    LEFT JOIN user_group_memberships ON user_group_memberships.user_id = users.id
-    LEFT JOIN user_groups ON user_groups.id = user_group_memberships.group_id
     WHERE users.email = ?`;
 
   return fallback
@@ -73,34 +68,15 @@ export default defineEventHandler(async (event) => {
     });
   }
 
-  const groupIds = user.group_ids
-    ? user.group_ids.split(",").map((groupId) => Number(groupId))
-    : user.group_id
-      ? [Number(user.group_id)]
-      : [];
-  const groupSlugs = user.group_slugs
-    ? user.group_slugs.split(",")
-    : user.group_slug
-      ? [user.group_slug]
-      : [];
-  const groupNames = user.group_names
-    ? user.group_names.split(",")
-    : user.group_name
-      ? [user.group_name]
-      : [];
-
   return {
     ok: true,
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
-      group_ids: groupIds,
-      group_slugs: groupSlugs,
-      group_names: groupNames,
-      group_id: groupIds[0] ?? null,
-      group_slug: groupSlugs[0] ?? null,
-      group_name: groupNames[0] ?? null,
+      is_admin: Boolean(user.is_admin),
+      auto_logout_minutes: Number(user.auto_logout_minutes) || 10,
+      role: user.is_admin ? "Admin" : "User",
     },
   };
 });
